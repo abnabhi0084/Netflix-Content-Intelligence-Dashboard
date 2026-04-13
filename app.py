@@ -233,3 +233,66 @@ ax.bar(actor_names, actor_counts)
 plt.xticks(rotation=45)
 
 st.pyplot(fig)
+
+
+
+import streamlit as st
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+#LOAD DATA
+df = pd.read_csv("netflix_titles.csv")
+
+#PREPARE DATA
+df['listed_in'] = df['listed_in'].fillna('')
+df['description'] = df['description'].fillna('')
+
+
+df['content'] = df['title']*2 + " " + df['listed_in'] + " " + df['description']
+
+#TF-IDF
+tfidf = TfidfVectorizer(stop_words='english')
+tfidf_matrix = tfidf.fit_transform(df['content'])
+
+#SIMILARITY
+cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+
+#INDEX MAPPING
+indices = pd.Series(df.index, index=df['title']).drop_duplicates()
+
+#FUNCTION
+def recommend(title):
+    matches = [i for i in indices.index if title.lower() in i.lower()]
+
+    if not matches:
+        return ["Not found"]
+
+    exact_match = [i for i in matches if i.lower() == title.lower()]
+
+    if exact_match:
+        title = exact_match[0]
+    else:
+        title = matches[0]
+
+    idx = indices[title]
+    sim_scores = list(enumerate(cosine_sim[idx]))
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:6]
+
+    movie_indices = [i[0] for i in sim_scores]
+    return df['title'].iloc[movie_indices].tolist()
+
+#UI
+st.title("Netflix Recommendation System")
+
+movie = st.text_input("Enter Movie Name")
+
+if st.button("Recommend"):
+    if movie:
+        results = recommend(movie)
+
+        st.subheader("Recommended Movies:")
+        for r in results:
+            st.write(":-", r)
+    else:
+        st.warning("Please enter a movie name")
